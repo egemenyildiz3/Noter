@@ -514,20 +514,38 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
 }
 .modal-body-input::placeholder { color: var(--muted); }
 
-/* Rendered body (read mode) — matches textarea visual exactly */
-.modal-body-rendered {
-  width: 100%;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--text);
-  min-height: 40px;
-  cursor: text;
-  white-space: pre-wrap;
-  word-break: break-word;
+/* Detected links strip below the textarea */
+.modal-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
 }
-.modal-body-rendered:hover { opacity: 0.85; }
-.modal-body-placeholder { color: var(--muted); }
+.modal-link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #7ea8ff;
+  font-size: 12px;
+  text-decoration: none;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(126, 168, 255, 0.08);
+  border: 1px solid rgba(126, 168, 255, 0.15);
+  transition: background 0.12s, border-color 0.12s;
+  overflow: hidden;
+}
+.modal-link-item:hover {
+  background: rgba(126, 168, 255, 0.15);
+  border-color: rgba(126, 168, 255, 0.3);
+}
+.modal-link-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+.modal-link-item svg { flex-shrink: 0; opacity: 0.7; }
 .modal-divider { height: 1px; background: var(--border); margin: 18px 0; }
 .modal-footer {
   display: flex;

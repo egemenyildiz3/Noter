@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NOTE_COLORS } from "../constants.js";
 import { api } from "../api.js";
 import { parseLinks } from "../linkify.js";
@@ -10,28 +10,19 @@ function parseImages(raw) {
   return (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-function BodyWithLinks({ text }) {
+// Extract unique URLs from text for the link preview strip.
+function extractLinks(text) {
+  if (!text) return [];
   const segments = parseLinks(text);
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.type === "link" ? (
-          <a
-            key={i}
-            href={seg.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="note-link"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {seg.value}
-          </a>
-        ) : (
-          <span key={i}>{seg.value}</span>
-        )
-      )}
-    </>
-  );
+  const seen = new Set();
+  const links = [];
+  for (const seg of segments) {
+    if (seg.type === "link" && !seen.has(seg.href)) {
+      seen.add(seg.href);
+      links.push(seg.href);
+    }
+  }
+  return links;
 }
 
 async function uploadFiles(files, onAdd, onError) {
@@ -65,25 +56,34 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
   const [uploading, setUploading]         = useState(false);
   const [dragOver, setDragOver]           = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [bodyEditing, setBodyEditing]     = useState(isNew);
 
   const bodyRef = useRef(null);
   const fileRef = useRef(null);
 
   // Auto-grow textarea
   useEffect(() => {
-    if (bodyRef.current) {
-      bodyRef.current.style.height = "auto";
-      bodyRef.current.style.height = bodyRef.current.scrollHeight + "px";
-    }
+    const el = bodyRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
   }, [body]);
 
+  // Focus body on open
   useEffect(() => {
-    if (bodyEditing && bodyRef.current) bodyRef.current.focus();
-  }, [bodyEditing]);
+    if (bodyRef.current) bodyRef.current.focus();
+  }, []);
 
-  // Global ESC to close — a keydown on the backdrop div misses events when
-  // focus is inside the modal (title input, textarea, etc.)
+  const currentData = useCallback(
+    () => ({ title, body, color, category, images: images.join(",") }),
+    [title, body, color, category, images]
+  );
+
+  const handleClose = useCallback(() => {
+    onSave(currentData());
+    onClose();
+  }, [onSave, onClose, currentData]);
+
+  // Global ESC / Cmd+Enter — stable ref so the listener is only added once
   useEffect(() => {
     function onKey(e) {
       if (e.key === "Escape") handleClose();
@@ -94,16 +94,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  });
-
-  function currentData() {
-    return { title, body, color, category, images: images.join(",") };
-  }
-
-  function handleClose() {
-    onSave(currentData());
-    onClose();
-  }
+  }, [handleClose]);
 
   function handleBackdropClick(e) {
     if (e.target === e.currentTarget) handleClose();
@@ -115,7 +106,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     onClose();
   }
 
-  // ---- Shared upload logic ----
+  // ---- Uploads ----
   async function processFiles(files) {
     if (!files.length) return;
     setUploadError("");
@@ -154,8 +145,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
-    const files = Array.from(e.dataTransfer.files || []);
-    await processFiles(files);
+    await processFiles(Array.from(e.dataTransfer.files || []));
   }
 
   async function removeImage(filename) {
@@ -163,15 +153,15 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     try { await api.deleteImage(filename); } catch { /* non-critical */ }
   }
 
+  const detectedLinks = extractLinks(body);
+  // Modal background: use note color if it's not the default dark tone.
+  const modalBg = color !== "#1e1f2e" ? color : "#141523";
+
   return (
-    <div
-      className="modal-backdrop"
-      onClick={handleBackdropClick}
-      tabIndex={-1}
-    >
+    <div className="modal-backdrop" onClick={handleBackdropClick} tabIndex={-1}>
       <div
         className={`modal${dragOver ? " modal-drag-over" : ""}`}
-        style={{ background: color !== "#1e1f2e" ? color : undefined }}
+        style={{ background: modalBg }}
         role="dialog"
         aria-modal="true"
         aria-label={isNew ? "New note" : "Edit note"}
@@ -179,6 +169,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {/* Drag-over overlay */}
         {dragOver && (
           <div className="modal-drop-overlay" aria-hidden="true">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -200,28 +191,39 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
           aria-label="Note title"
         />
 
-        {bodyEditing ? (
-          <textarea
-            ref={bodyRef}
-            className="modal-body-input"
-            placeholder="Take a note…"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onBlur={() => setBodyEditing(false)}
-            aria-label="Note body"
-          />
-        ) : (
-          <div
-            className="modal-body-rendered"
-            onClick={() => setBodyEditing(true)}
-            role="textbox"
-            aria-label="Note body — click to edit"
-            aria-multiline="true"
-          >
-            {body ? <BodyWithLinks text={body} /> : <span className="modal-body-placeholder">Take a note…</span>}
+        {/* Always-visible textarea — no mode switching */}
+        <textarea
+          ref={bodyRef}
+          className="modal-body-input"
+          placeholder="Take a note…"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          aria-label="Note body"
+        />
+
+        {/* Detected links strip — shown below the textarea when URLs are present */}
+        {detectedLinks.length > 0 && (
+          <div className="modal-links" aria-label="Links in note">
+            {detectedLinks.map((href) => (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="modal-link-item"
+                title={href}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+                <span>{href.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
+              </a>
+            ))}
           </div>
         )}
 
+        {/* Image grid */}
         {images.length > 0 && (
           <div className="modal-images" role="list" aria-label="Attached images">
             {images.map((filename) => (
@@ -237,9 +239,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
                   onClick={() => removeImage(filename)}
                   aria-label="Remove image"
                   title="Remove"
-                >
-                  ×
-                </button>
+                >×</button>
               </div>
             ))}
           </div>
