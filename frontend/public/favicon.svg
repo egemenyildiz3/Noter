@@ -5,8 +5,11 @@
       <stop offset="100%" stop-color="#b45cff"/>
     </linearGradient>
   </defs>
+  <!-- Rounded app tile -->
   <rect width="36" height="36" rx="10" fill="url(#g)"/>
-  <rect x="9" y="10" width="18" height="2.5" rx="1.25" fill="white" opacity="0.9"/>
-  <rect x="9" y="16" width="14" height="2.5" rx="1.25" fill="white" opacity="0.9"/>
-  <rect x="9" y="22" width="16" height="2.5" rx="1.25" fill="white" opacity="0.9"/>
+  <!-- "N" monogram -->
+  <path d="M11 26 V10 h3.2 l7.6 10.3 V10 H25 v16 h-3.2 L14.2 15.7 V26 Z"
+        fill="#fff" opacity="0.96"/>
+  <!-- note-line accent under the mark -->
+  <rect x="11" y="28.5" width="14" height="2" rx="1" fill="#fff" opacity="0.55"/>
 </svg>
