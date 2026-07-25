@@ -74,13 +74,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
   const fileRef   = useRef(null);
   const modalRef  = useRef(null);
 
-  // Auto-grow textarea
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-  }, [body, editing]);
+  // Auto-grow textarea — removed, using fixed height with overflow scroll instead
 
   // Focus textarea when switching to edit mode
   useEffect(() => {
@@ -224,6 +218,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
           aria-label="Note title"
         />
 
+        <div className="modal-scroll">
         {/* Body: rendered (links clickable) or editable textarea */}
         {editing ? (
           <textarea
@@ -261,6 +256,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
         )}
 
         {uploadError && <p className="modal-upload-error" role="alert">{uploadError}</p>}
+        </div>{/* end modal-scroll */}
 
         <div className="modal-divider" />
 

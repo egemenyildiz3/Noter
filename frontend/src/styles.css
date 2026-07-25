@@ -454,18 +454,15 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 100;
   display: flex;
-  /* flex-start + padding keeps the modal at a fixed top offset so it
-     grows downward as content is added, never jumping upward */
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 10vh 24px 24px;
+  padding: 24px;
   animation: fade-in 0.15s ease;
-  overflow-y: auto;
 }
 @keyframes fade-in {
   from { opacity: 0; }
@@ -475,18 +472,32 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
   background: #141523;
   border: 1px solid var(--border-strong);
   border-radius: 22px;
-  padding: 28px;
+  padding: 28px 28px 22px;
   width: 100%;
-  max-width: 560px;
-  /* No fixed max-height — modal grows with content and the backdrop scrolls */
+  max-width: 540px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.9);
-  animation: modal-rise 0.2s ease both;
+  animation: modal-rise 0.18s ease both;
   position: relative;
+  overflow: hidden;
 }
 @keyframes modal-rise {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+/* The scrollable area is the body content, not the whole modal */
+.modal-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  /* hide scrollbar unless needed */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.modal-scroll::-webkit-scrollbar { width: 4px; }
+.modal-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
 .modal-title-input {
   width: 100%;
   background: none;
@@ -499,6 +510,7 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
   margin-bottom: 12px;
   padding: 0;
   letter-spacing: -0.02em;
+  flex-shrink: 0;
 }
 .modal-title-input::placeholder { color: var(--muted); }
 .modal-body-input {
@@ -511,64 +523,67 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
   line-height: 1.7;
   color: var(--text);
   resize: none;
-  min-height: 40px;
+  /* Fixed comfortable height — doesn't push modal around */
+  min-height: 120px;
+  max-height: 40vh;
   padding: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
+.modal-body-input::-webkit-scrollbar { width: 4px; }
+.modal-body-input::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
 .modal-body-input::placeholder { color: var(--muted); }
 
-/* Rendered body (read mode) — visually identical to the textarea */
+/* Rendered body (read mode) */
 .modal-body-rendered {
   width: 100%;
   font-family: inherit;
   font-size: 14px;
   line-height: 1.7;
   color: var(--text);
-  min-height: 40px;
+  min-height: 120px;
   cursor: text;
   white-space: pre-wrap;
   word-break: break-word;
   outline: none;
 }
 .modal-body-rendered:focus { outline: none; }
-.modal-body-placeholder { color: var(--muted); font-style: normal; }
+.modal-body-placeholder { color: var(--muted); }
+.modal-inline-link { white-space: normal; word-break: break-all; }
 
-/* Inline link inside the rendered body */
-.modal-inline-link {
-  /* inherits .note-link color + underline */
-  white-space: normal;
-  word-break: break-all;
-}
-.modal-divider { height: 1px; background: var(--border); margin: 18px 0; }
+.modal-divider { height: 1px; background: var(--border); margin: 16px 0 14px; flex-shrink: 0; }
 .modal-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
-.modal-footer-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.modal-footer-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.modal-footer-right { display: flex; align-items: center; gap: 10px; }
 .color-picker {
   display: flex;
-  gap: 7px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .color-swatch {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
-  transition: transform 0.12s, border-color 0.12s;
+  transition: transform 0.12s;
   outline: none;
 }
 .color-swatch:hover { transform: scale(1.2); }
-.color-swatch.selected { border-color: white; }
+.color-swatch.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
 .modal-cat-select {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 7px 14px;
+  padding: 6px 28px 6px 12px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -580,19 +595,18 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
   -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b90a6' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 30px;
+  background-position: right 10px center;
 }
 .modal-cat-select:focus { border-color: var(--accent); }
 .modal-close-btn {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  background: var(--surface);
+  top: 18px;
+  right: 18px;
+  background: rgba(255,255,255,0.07);
   border: 1px solid var(--border);
   color: var(--muted);
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -601,8 +615,9 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
   font-size: 18px;
   transition: color 0.15s, background 0.15s;
   line-height: 1;
+  flex-shrink: 0;
 }
-.modal-close-btn:hover { color: var(--text); background: var(--surface-2); }
+.modal-close-btn:hover { color: var(--text); background: rgba(255,255,255,0.12); }
 
 /* Drag-over state */
 .modal.modal-drag-over {
