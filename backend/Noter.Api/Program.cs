@@ -7,6 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
+builder.Services.AddHostedService<Noter.Api.Services.MonthlyBackupService>();
+
 var dbPath = builder.Configuration["DB_PATH"] ?? "noter.db";
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
