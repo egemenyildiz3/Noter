@@ -456,12 +456,16 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 100;
   display: flex;
-  align-items: center;
+  /* flex-start + padding keeps the modal at a fixed top offset so it
+     grows downward as content is added, never jumping upward */
+  align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  padding: 10vh 24px 24px;
   animation: fade-in 0.15s ease;
+  overflow-y: auto;
 }
 @keyframes fade-in {
   from { opacity: 0; }
@@ -474,8 +478,7 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
   padding: 28px;
   width: 100%;
   max-width: 560px;
-  max-height: 80vh;
-  overflow-y: auto;
+  /* No fixed max-height — modal grows with content and the backdrop scrolls */
   box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.9);
   animation: modal-rise 0.2s ease both;
   position: relative;
@@ -514,38 +517,28 @@ h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px
 }
 .modal-body-input::placeholder { color: var(--muted); }
 
-/* Detected links strip below the textarea */
-.modal-links {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 10px;
+/* Rendered body (read mode) — visually identical to the textarea */
+.modal-body-rendered {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  min-height: 40px;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+  outline: none;
 }
-.modal-link-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #7ea8ff;
-  font-size: 12px;
-  text-decoration: none;
-  padding: 5px 10px;
-  border-radius: 8px;
-  background: rgba(126, 168, 255, 0.08);
-  border: 1px solid rgba(126, 168, 255, 0.15);
-  transition: background 0.12s, border-color 0.12s;
-  overflow: hidden;
+.modal-body-rendered:focus { outline: none; }
+.modal-body-placeholder { color: var(--muted); font-style: normal; }
+
+/* Inline link inside the rendered body */
+.modal-inline-link {
+  /* inherits .note-link color + underline */
+  white-space: normal;
+  word-break: break-all;
 }
-.modal-link-item:hover {
-  background: rgba(126, 168, 255, 0.15);
-  border-color: rgba(126, 168, 255, 0.3);
-}
-.modal-link-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 420px;
-}
-.modal-link-item svg { flex-shrink: 0; opacity: 0.7; }
 .modal-divider { height: 1px; background: var(--border); margin: 18px 0; }
 .modal-footer {
   display: flex;

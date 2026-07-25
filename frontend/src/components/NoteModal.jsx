@@ -10,19 +10,30 @@ function parseImages(raw) {
   return (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-// Extract unique URLs from text for the link preview strip.
-function extractLinks(text) {
-  if (!text) return [];
+// Render text with inline clickable links.
+function RichBody({ text, placeholder }) {
+  if (!text) return <span className="modal-body-placeholder">{placeholder}</span>;
   const segments = parseLinks(text);
-  const seen = new Set();
-  const links = [];
-  for (const seg of segments) {
-    if (seg.type === "link" && !seen.has(seg.href)) {
-      seen.add(seg.href);
-      links.push(seg.href);
-    }
-  }
-  return links;
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.type === "link" ? (
+          <a
+            key={i}
+            href={seg.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="note-link modal-inline-link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {seg.value}
+          </a>
+        ) : (
+          <span key={i}>{seg.value}</span>
+        )
+      )}
+    </>
+  );
 }
 
 async function uploadFiles(files, onAdd, onError) {
@@ -56,9 +67,12 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
   const [uploading, setUploading]         = useState(false);
   const [dragOver, setDragOver]           = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // editing = textarea visible; reading = rich rendered div
+  const [editing, setEditing]             = useState(isNew);
 
-  const bodyRef = useRef(null);
-  const fileRef = useRef(null);
+  const bodyRef   = useRef(null);
+  const fileRef   = useRef(null);
+  const modalRef  = useRef(null);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -66,12 +80,22 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     if (!el) return;
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
-  }, [body]);
+  }, [body, editing]);
 
-  // Focus body on open
+  // Focus textarea when switching to edit mode
   useEffect(() => {
-    if (bodyRef.current) bodyRef.current.focus();
-  }, []);
+    if (editing && bodyRef.current) {
+      const el = bodyRef.current;
+      el.focus();
+      // Place cursor at end
+      el.selectionStart = el.selectionEnd = el.value.length;
+    }
+  }, [editing]);
+
+  // Focus body on first open for new notes
+  useEffect(() => {
+    if (isNew && bodyRef.current) bodyRef.current.focus();
+  }, []); // eslint-disable-line
 
   const currentData = useCallback(
     () => ({ title, body, color, category, images: images.join(",") }),
@@ -83,7 +107,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     onClose();
   }, [onSave, onClose, currentData]);
 
-  // Global ESC / Cmd+Enter — stable ref so the listener is only added once
+  // ESC closes modal; Cmd/Ctrl+Enter also closes
   useEffect(() => {
     function onKey(e) {
       if (e.key === "Escape") handleClose();
@@ -95,6 +119,18 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [handleClose]);
+
+  // Switch back to read mode when clicking outside the modal entirely
+  // (not when moving focus within the modal — e.g. clicking color swatch)
+  useEffect(() => {
+    function onMouseDown(e) {
+      if (modalRef.current && !modalRef.current.contains(e.target)) {
+        setEditing(false);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
 
   function handleBackdropClick(e) {
     if (e.target === e.currentTarget) handleClose();
@@ -125,7 +161,6 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     await processFiles(files);
   }
 
-  // ---- Drag and drop ----
   function handleDragOver(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -153,13 +188,12 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     try { await api.deleteImage(filename); } catch { /* non-critical */ }
   }
 
-  const detectedLinks = extractLinks(body);
-  // Modal background: use note color if it's not the default dark tone.
   const modalBg = color !== "#1e1f2e" ? color : "#141523";
 
   return (
     <div className="modal-backdrop" onClick={handleBackdropClick} tabIndex={-1}>
       <div
+        ref={modalRef}
         className={`modal${dragOver ? " modal-drag-over" : ""}`}
         style={{ background: modalBg }}
         role="dialog"
@@ -169,7 +203,6 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Drag-over overlay */}
         {dragOver && (
           <div className="modal-drop-overlay" aria-hidden="true">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -191,63 +224,43 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
           aria-label="Note title"
         />
 
-        {/* Always-visible textarea — no mode switching */}
-        <textarea
-          ref={bodyRef}
-          className="modal-body-input"
-          placeholder="Take a note…"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          aria-label="Note body"
-        />
-
-        {/* Detected links strip — shown below the textarea when URLs are present */}
-        {detectedLinks.length > 0 && (
-          <div className="modal-links" aria-label="Links in note">
-            {detectedLinks.map((href) => (
-              <a
-                key={href}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="modal-link-item"
-                title={href}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                </svg>
-                <span>{href.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
-              </a>
-            ))}
+        {/* Body: rendered (links clickable) or editable textarea */}
+        {editing ? (
+          <textarea
+            ref={bodyRef}
+            className="modal-body-input"
+            placeholder="Take a note…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            aria-label="Note body"
+          />
+        ) : (
+          <div
+            className="modal-body-rendered"
+            onClick={() => setEditing(true)}
+            role="textbox"
+            aria-multiline="true"
+            aria-label="Note body — click to edit"
+            tabIndex={0}
+            onFocus={() => setEditing(true)}
+          >
+            <RichBody text={body} placeholder="Take a note…" />
           </div>
         )}
 
-        {/* Image grid */}
+        {/* Images */}
         {images.length > 0 && (
           <div className="modal-images" role="list" aria-label="Attached images">
             {images.map((filename) => (
               <div key={filename} className="modal-image-wrap" role="listitem">
-                <img
-                  src={api.imageUrl(filename)}
-                  alt="Attached"
-                  className="modal-image"
-                  loading="lazy"
-                />
-                <button
-                  className="modal-image-remove"
-                  onClick={() => removeImage(filename)}
-                  aria-label="Remove image"
-                  title="Remove"
-                >×</button>
+                <img src={api.imageUrl(filename)} alt="Attached" className="modal-image" loading="lazy" />
+                <button className="modal-image-remove" onClick={() => removeImage(filename)} aria-label="Remove image" title="Remove">×</button>
               </div>
             ))}
           </div>
         )}
 
-        {uploadError && (
-          <p className="modal-upload-error" role="alert">{uploadError}</p>
-        )}
+        {uploadError && <p className="modal-upload-error" role="alert">{uploadError}</p>}
 
         <div className="modal-divider" />
 
@@ -260,9 +273,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
                   className={`color-swatch${color === c.hex ? " selected" : ""}`}
                   style={{
                     background: c.hex,
-                    outline: color === c.hex
-                      ? "2px solid var(--accent)"
-                      : "2px solid rgba(255,255,255,0.15)",
+                    outline: color === c.hex ? "2px solid var(--accent)" : "2px solid rgba(255,255,255,0.15)",
                   }}
                   onClick={() => setColor(c.hex)}
                   title={c.name}
@@ -272,16 +283,9 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
               ))}
             </div>
 
-            <select
-              className="modal-cat-select"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              aria-label="Category"
-            >
+            <select className="modal-cat-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
               <option value="">No category</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
+              {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
             </select>
 
             <button
@@ -292,26 +296,12 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
               title="Attach image (JPEG or PNG, max 5 MB) — or drag and drop"
             >
               {uploading ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="spin">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
               ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
-                </svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
               )}
             </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png"
-              multiple
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-              aria-label="Image file input"
-            />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png" multiple style={{ display: "none" }} onChange={handleFileChange} aria-label="Image file input" />
           </div>
 
           <div className="modal-footer-right">
@@ -322,22 +312,9 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
                 aria-label="Delete note"
               >
                 {confirmDelete ? (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    Confirm
-                  </>
+                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Confirm</>
                 ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                      <path d="M10 11v6"/><path d="M14 11v6"/>
-                      <path d="M9 6V4h6v2"/>
-                    </svg>
-                    Delete
-                  </>
+                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>Delete</>
                 )}
               </button>
             )}
