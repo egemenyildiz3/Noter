@@ -54,6 +54,8 @@ async function uploadFiles(files, onAdd, onError) {
 }
 
 export default function NoteModal({ note, categories, onClose, onSave, onDelete }) {
+  const isNew = !note?.id;
+
   const [title, setTitle]                 = useState(note?.title ?? "");
   const [body, setBody]                   = useState(note?.body ?? "");
   const [color, setColor]                 = useState(note?.color ?? "#1e1f2e");
@@ -63,12 +65,10 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
   const [uploading, setUploading]         = useState(false);
   const [dragOver, setDragOver]           = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // Body starts in edit mode for new notes, read mode for existing ones.
   const [bodyEditing, setBodyEditing]     = useState(isNew);
 
   const bodyRef = useRef(null);
   const fileRef = useRef(null);
-  const isNew   = !note?.id;
 
   // Auto-grow textarea
   useEffect(() => {
