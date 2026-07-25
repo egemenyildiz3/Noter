@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+node_modules/
+dist/
+
+# Uploads (user data — not committed)
+backend/Noter.Api/wwwroot/uploads/
+
+# macOS
+.DS_Store

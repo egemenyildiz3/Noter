@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./backend/Noter.Api
+    container_name: noter-backend
+    volumes:
+      - noter-data:/data
+    expose:
+      - "8080"
+    ports:
+      - "5199:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: noter-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+
+volumes:
+  noter-data:
