@@ -1,7 +1,6 @@
 services:
   backend:
-    build:
-      context: ./backend/Noter.Api
+    image: ghcr.io/egemenyildiz3/noter-backend:latest
     container_name: noter-backend
     volumes:
       - noter-data:/data
@@ -12,8 +11,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
+    image: ghcr.io/egemenyildiz3/noter-frontend:latest
     container_name: noter-frontend
     depends_on:
       - backend
