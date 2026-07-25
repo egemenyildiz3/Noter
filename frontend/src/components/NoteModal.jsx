@@ -1,12 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import { NOTE_COLORS } from "../constants.js";
 import { api } from "../api.js";
+import { parseLinks } from "../linkify.js";
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png"];
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 
 function parseImages(raw) {
   return (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function BodyWithLinks({ text }) {
+  const segments = parseLinks(text);
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.type === "link" ? (
+          <a
+            key={i}
+            href={seg.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="note-link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {seg.value}
+          </a>
+        ) : (
+          <span key={i}>{seg.value}</span>
+        )
+      )}
+    </>
+  );
 }
 
 async function uploadFiles(files, onAdd, onError) {
@@ -38,6 +63,8 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
   const [uploading, setUploading]         = useState(false);
   const [dragOver, setDragOver]           = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Body starts in edit mode for new notes, read mode for existing ones.
+  const [bodyEditing, setBodyEditing]     = useState(isNew);
 
   const bodyRef = useRef(null);
   const fileRef = useRef(null);
@@ -52,8 +79,8 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
   }, [body]);
 
   useEffect(() => {
-    if (isNew && bodyRef.current) bodyRef.current.focus();
-  }, [isNew]);
+    if (bodyEditing && bodyRef.current) bodyRef.current.focus();
+  }, [bodyEditing]);
 
   // Global ESC to close — a keydown on the backdrop div misses events when
   // focus is inside the modal (title input, textarea, etc.)
@@ -173,14 +200,27 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
           aria-label="Note title"
         />
 
-        <textarea
-          ref={bodyRef}
-          className="modal-body-input"
-          placeholder="Take a note…"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          aria-label="Note body"
-        />
+        {bodyEditing ? (
+          <textarea
+            ref={bodyRef}
+            className="modal-body-input"
+            placeholder="Take a note…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onBlur={() => setBodyEditing(false)}
+            aria-label="Note body"
+          />
+        ) : (
+          <div
+            className="modal-body-rendered"
+            onClick={() => setBodyEditing(true)}
+            role="textbox"
+            aria-label="Note body — click to edit"
+            aria-multiline="true"
+          >
+            {body ? <BodyWithLinks text={body} /> : <span className="modal-body-placeholder">Take a note…</span>}
+          </div>
+        )}
 
         {images.length > 0 && (
           <div className="modal-images" role="list" aria-label="Attached images">
