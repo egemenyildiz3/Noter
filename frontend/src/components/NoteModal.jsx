@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { NOTE_COLORS } from "../constants.js";
 import { api } from "../api.js";
 import { parseLinks } from "../linkify.js";
@@ -10,29 +11,24 @@ function parseImages(raw) {
   return (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-// Render text with inline clickable links.
+// Render text with inline clickable http/https links (read mode).
 function RichBody({ text, placeholder }) {
   if (!text) return <span className="modal-body-placeholder">{placeholder}</span>;
-  const segments = parseLinks(text);
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.type === "link" ? (
-          <a
-            key={i}
-            href={seg.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="note-link modal-inline-link"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {seg.value}
-          </a>
-        ) : (
-          <span key={i}>{seg.value}</span>
-        )
-      )}
-    </>
+  return parseLinks(text).map((seg, i) =>
+    seg.type === "link" ? (
+      <a
+        key={i}
+        href={seg.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="note-link modal-inline-link"
+        onClick={(e) => e.stopPropagation()} // click link, don't switch to edit mode
+      >
+        {seg.value}
+      </a>
+    ) : (
+      <span key={i}>{seg.value}</span>
+    )
   );
 }
 
@@ -67,29 +63,32 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
   const [uploading, setUploading]         = useState(false);
   const [dragOver, setDragOver]           = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // editing = textarea visible; reading = rich rendered div
+  // Read mode shows clickable links; edit mode shows the textarea.
+  // New notes open straight into edit mode.
   const [editing, setEditing]             = useState(isNew);
 
   const bodyRef   = useRef(null);
   const fileRef   = useRef(null);
   const modalRef  = useRef(null);
 
-  // Auto-grow textarea — removed, using fixed height with overflow scroll instead
+  // Auto-grow the textarea to fit its content (capped via CSS max-height).
+  const autoGrow = useCallback(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
 
-  // Focus textarea when switching to edit mode
+  // When entering edit mode, focus the textarea, place the cursor at the end,
+  // and size it to its content.
   useEffect(() => {
-    if (editing && bodyRef.current) {
-      const el = bodyRef.current;
-      el.focus();
-      // Place cursor at end
-      el.selectionStart = el.selectionEnd = el.value.length;
-    }
-  }, [editing]);
-
-  // Focus body on first open for new notes
-  useEffect(() => {
-    if (isNew && bodyRef.current) bodyRef.current.focus();
-  }, []); // eslint-disable-line
+    if (!editing) return;
+    const el = bodyRef.current;
+    if (!el) return;
+    autoGrow();
+    el.focus();
+    el.selectionStart = el.selectionEnd = el.value.length;
+  }, [editing, autoGrow]);
 
   const currentData = useCallback(
     () => ({ title, body, color, category, images: images.join(",") }),
@@ -113,18 +112,6 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [handleClose]);
-
-  // Switch back to read mode when clicking outside the modal entirely
-  // (not when moving focus within the modal — e.g. clicking color swatch)
-  useEffect(() => {
-    function onMouseDown(e) {
-      if (modalRef.current && !modalRef.current.contains(e.target)) {
-        setEditing(false);
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
 
   function handleBackdropClick(e) {
     if (e.target === e.currentTarget) handleClose();
@@ -184,7 +171,10 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
 
   const modalBg = color !== "#1e1f2e" ? color : "#141523";
 
-  return (
+  // Render into document.body so an ancestor's transform/filter (e.g. the
+  // .content "rise" animation) can't become the containing block and trap
+  // the fixed-position backdrop below the header.
+  return createPortal(
     <div className="modal-backdrop" onClick={handleBackdropClick} tabIndex={-1}>
       <div
         ref={modalRef}
@@ -219,24 +209,24 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
         />
 
         <div className="modal-scroll">
-        {/* Body: rendered (links clickable) or editable textarea */}
+        {/* Body: read mode shows clickable links; click the text to edit. */}
         {editing ? (
           <textarea
             ref={bodyRef}
             className="modal-body-input"
             placeholder="Take a note…"
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => { setBody(e.target.value); autoGrow(); }}
+            onBlur={() => setEditing(false)}
             aria-label="Note body"
           />
         ) : (
           <div
             className="modal-body-rendered"
-            onClick={() => setEditing(true)}
             role="textbox"
-            aria-multiline="true"
-            aria-label="Note body — click to edit"
             tabIndex={0}
+            aria-label="Note body — click to edit"
+            onClick={() => setEditing(true)}
             onFocus={() => setEditing(true)}
           >
             <RichBody text={body} placeholder="Take a note…" />
@@ -317,6 +307,7 @@ export default function NoteModal({ note, categories, onClose, onSave, onDelete 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

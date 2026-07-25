@@ -23,13 +23,35 @@ public class ExportController : ControllerBase
 
     // GET /api/export/json
     [HttpGet("export/json")]
-    public async Task<BackupData> ExportJson() => new BackupData
+    public async Task<BackupData> ExportJson()
     {
-        Version = 1,
-        ExportedAt = DateTime.UtcNow,
-        Notes = await _db.Notes.OrderBy(n => n.SortOrder).ToListAsync(),
-        Settings = await _db.Settings.ToListAsync(),
-    };
+        var notes = await _db.Notes
+            .AsNoTracking()
+            .OrderBy(n => n.SortOrder)
+            .ToListAsync();
+
+        return new BackupData
+        {
+            Version = 1,
+            ExportedAt = DateTime.UtcNow,
+            // Images are intentionally excluded from backups — the JSON dump is
+            // note text/metadata only, not uploaded binaries. Links live in Body
+            // and round-trip normally.
+            Notes = notes.Select(n => new Note
+            {
+                Id = n.Id,
+                Title = n.Title,
+                Body = n.Body,
+                Color = n.Color,
+                Category = n.Category,
+                SortOrder = n.SortOrder,
+                CreatedAt = n.CreatedAt,
+                UpdatedAt = n.UpdatedAt,
+                Images = "",
+            }).ToList(),
+            Settings = await _db.Settings.AsNoTracking().ToListAsync(),
+        };
+    }
 
     // POST /api/import/json
     [HttpPost("import/json")]

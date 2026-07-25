@@ -11,6 +11,10 @@ export default defineConfig({
         target: "http://localhost:5199",
         changeOrigin: true,
       },
+      "/uploads": {
+        target: "http://localhost:5199",
+        changeOrigin: true,
+      },
     },
   },
 });
