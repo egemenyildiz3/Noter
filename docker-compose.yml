@@ -2,8 +2,13 @@ services:
   backend:
     image: ghcr.io/egemenyildiz3/noter-backend:latest
     container_name: noter-backend
+    env_file:
+      - .env
+    environment:
+      - EXTRA_BACKUP_PATH=${EXTRA_BACKUP_PATH}
     volumes:
       - noter-data:/data
+      - ${EXTRA_BACKUP_PATH}:${EXTRA_BACKUP_PATH}
     expose:
       - "8080"
     ports:

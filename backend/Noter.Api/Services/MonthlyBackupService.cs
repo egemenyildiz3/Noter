@@ -6,6 +6,23 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Noter.Api.Services;
 
+/// <summary>
+/// Writes a JSON snapshot of all notes + settings to the persistent volume once
+/// per calendar month. Images are intentionally excluded — links in note bodies
+/// are preserved as plain text and round-trip normally.
+///
+/// Destinations
+/// ─────────────
+/// Primary   : BACKUPS_PATH env var, or {volume}/backups (derived from DB_PATH).
+/// Secondary : ExtraBackupPath in appsettings.json  ← set this to any absolute path.
+///             Also overridable at runtime via the EXTRA_BACKUP_PATH env var.
+///             Leave empty / omit to disable the secondary copy.
+///
+/// Resilience: polls every 6 hours and creates the current month's file only if
+/// it doesn't already exist, so a container that was off on the 1st still gets
+/// that month's backup as soon as it comes back online. Writes are crash-safe
+/// (temp file → atomic move). Keeps the 12 most recent monthly snapshots.
+/// </summary>
 public class MonthlyBackupService : BackgroundService
 {
     private const int RetainMonths = 12;
@@ -25,8 +42,9 @@ public class MonthlyBackupService : BackgroundService
         _logger       = logger;
     }
 
-    // Resolve the backups directory: BACKUPS_PATH env, else "<data dir>/backups"
-    // where the data dir is inferred from DB_PATH (the volume mount in Docker).
+    // ── Primary destination ───────────────────────────────────────────────────
+    // Controlled by BACKUPS_PATH env var; falls back to {data dir}/backups
+    // where the data dir is inferred from DB_PATH (the Docker volume mount).
     private string BackupsDir
     {
         get
@@ -37,6 +55,20 @@ public class MonthlyBackupService : BackgroundService
             var dbPath  = _config["DB_PATH"] ?? "noter.db";
             var dataDir = Path.GetDirectoryName(Path.GetFullPath(dbPath)) ?? ".";
             return Path.Combine(dataDir, "backups");
+        }
+    }
+
+    // ── Secondary destination (optional) ─────────────────────────────────────
+    // Set "ExtraBackupPath" in appsettings.json to an absolute path, e.g.:
+    //   "ExtraBackupPath": "/home/egemen/file-storage/information"
+    // Or override at runtime with the EXTRA_BACKUP_PATH environment variable.
+    // Null / empty = disabled.
+    private string? ExtraBackupsDir
+    {
+        get
+        {
+            var path = _config["ExtraBackupPath"];
+            return string.IsNullOrWhiteSpace(path) ? null : path;
         }
     }
 
@@ -70,15 +102,20 @@ public class MonthlyBackupService : BackgroundService
 
     private async Task EnsureBackupForCurrentMonthAsync(CancellationToken ct)
     {
-        var dir = BackupsDir;
-        Directory.CreateDirectory(dir);
+        var primaryDir = BackupsDir;
+        Directory.CreateDirectory(primaryDir);
 
-        var monthKey = DateTime.UtcNow.ToString("yyyy-MM");
-        var target   = Path.Combine(dir, $"noter-backup-{monthKey}.json");
+        var monthKey    = DateTime.UtcNow.ToString("yyyy-MM");
+        var filename    = $"noter-backup-{monthKey}.json";
+        var primaryPath = Path.Combine(primaryDir, filename);
 
-        if (File.Exists(target))
-            return; // already have this month's snapshot
+        if (File.Exists(primaryPath))
+        {
+            MirrorToExtra(primaryPath, filename);
+            return;
+        }
 
+        // ── Build the snapshot ────────────────────────────────────────────────
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -91,7 +128,6 @@ public class MonthlyBackupService : BackgroundService
         {
             Version    = 1,
             ExportedAt = DateTime.UtcNow,
-            // Images excluded on purpose (see /api/export/json).
             Notes = notes.Select(n => new Note
             {
                 Id        = n.Id,
@@ -102,32 +138,51 @@ public class MonthlyBackupService : BackgroundService
                 SortOrder = n.SortOrder,
                 CreatedAt = n.CreatedAt,
                 UpdatedAt = n.UpdatedAt,
-                Images    = "",
+                Images    = "", // excluded from backups
             }).ToList(),
             Settings = await db.Settings.AsNoTracking().ToListAsync(ct),
         };
 
         var json = JsonSerializer.Serialize(backup, new JsonSerializerOptions { WriteIndented = true });
 
-        // Write to a temp file first, then move into place so a crash mid-write
-        // can never leave a truncated backup.
-        var tmp = target + ".tmp";
+        var tmp = primaryPath + ".tmp";
         await File.WriteAllTextAsync(tmp, json, ct);
-        File.Move(tmp, target, overwrite: true);
+        File.Move(tmp, primaryPath, overwrite: true);
 
-        _logger.LogInformation("Wrote monthly backup: {Path} ({Count} notes)", target, backup.Notes.Count);
+        _logger.LogInformation(
+            "Wrote monthly backup: {Path} ({Count} notes)",
+            primaryPath, backup.Notes.Count);
 
-        PruneOldBackups(dir);
+        MirrorToExtra(primaryPath, filename);
+
+        PruneOldBackups(primaryDir);
     }
 
-    // Keep only the most recent RetainMonths backups.
+    private void MirrorToExtra(string sourcePath, string filename)
+    {
+        var extra = ExtraBackupsDir;
+        if (extra is null) return;
+
+        try
+        {
+            Directory.CreateDirectory(extra);
+            var dest = Path.Combine(extra, filename);
+            File.Copy(sourcePath, dest, overwrite: true);
+            _logger.LogInformation("Mirrored backup to extra destination: {Path}", dest);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to mirror backup to extra destination '{Extra}'.", extra);
+        }
+    }
+
     private void PruneOldBackups(string dir)
     {
         try
         {
             var files = Directory
                 .GetFiles(dir, "noter-backup-*.json")
-                .OrderByDescending(f => f) // yyyy-MM sorts lexicographically
+                .OrderByDescending(f => f)
                 .Skip(RetainMonths)
                 .ToList();
 
