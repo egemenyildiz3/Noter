@@ -67,8 +67,12 @@ public class MonthlyBackupService : BackgroundService
     {
         get
         {
-            var path = _config["ExtraBackupPath"];
-            return string.IsNullOrWhiteSpace(path) ? null : path;
+            var envPath = _config["EXTRA_BACKUP_PATH"]?.Trim();
+            if (!string.IsNullOrWhiteSpace(envPath))
+                return envPath;
+
+            var configuredPath = _config["ExtraBackupPath"]?.Trim();
+            return string.IsNullOrWhiteSpace(configuredPath) ? null : configuredPath;
         }
     }
 
