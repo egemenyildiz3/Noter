@@ -1,14 +1,15 @@
 services:
   backend:
-    image: ghcr.io/egemenyildiz3/noter-backend:latest
+    build:
+      context: ./backend/Noter.Api
     container_name: noter-backend
     env_file:
       - .env
     environment:
-      - EXTRA_BACKUP_PATH=${EXTRA_BACKUP_PATH}
+      - EXTRA_BACKUP_PATH=${EXTRA_BACKUP_PATH:-/home/egemen/file-storage/information}
     volumes:
       - noter-data:/data
-      - ${EXTRA_BACKUP_PATH}:${EXTRA_BACKUP_PATH}
+      - ${EXTRA_BACKUP_PATH:-/home/egemen/file-storage/information}:${EXTRA_BACKUP_PATH:-/home/egemen/file-storage/information}
     expose:
       - "8080"
     ports:
